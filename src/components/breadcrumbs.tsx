@@ -5,11 +5,7 @@ import { usePathname } from "next/navigation";
 
 const pathLabels: Record<string, string> = {
   "/": "Dashboard",
-  "/x": "X",
-  "/x-content": "Tweets",
-  "/x-analytics": "X Analytics",
   "/watchlist-radar": "Trend Radar",
-  "/youtube": "YouTube",
   "/longform": "Longform",
   "/articles": "Articles",
   "/client-pulse": "Client Pulse",

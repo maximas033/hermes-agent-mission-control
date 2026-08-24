@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Twitter, Youtube, ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Sparkline } from "@/components/sparkline";
 import { HermesBriefing } from "@/components/hermes-briefing";
@@ -146,14 +146,12 @@ function SectionLabel({ children, right }: { children: React.ReactNode; right?: 
 }
 
 // ── Ideas section ─────────────────────────────────────────
-type IdeaTab = "x" | "youtube" | "builds";
+type IdeaTab = "builds";
 function IdeasPanel({ sageDrafts, ytIdeas, buildIdeas }: {
   sageDrafts: Draft[]; ytIdeas: YTIdea[]; buildIdeas: BuildIdea[];
 }) {
-  const [tab, setTab] = useState<IdeaTab>("x");
+  const [tab, setTab] = useState<IdeaTab>("builds");
   const tabs: { key: IdeaTab; label: string; count: number }[] = [
-    { key: "x", label: "X", count: sageDrafts.length },
-    { key: "youtube", label: "YouTube", count: ytIdeas.length },
     { key: "builds", label: "Builds", count: buildIdeas.length },
   ];
 
@@ -178,22 +176,6 @@ function IdeasPanel({ sageDrafts, ytIdeas, buildIdeas }: {
       </div>
 
       <div className="space-y-1 min-h-[172px]">
-        {tab === "x" && (sageDrafts.length > 0 ? sageDrafts.map((d, i) => (
-          <a key={d.id} href="/x-content" className="group flex gap-3 items-center py-2 border-b border-[var(--hq-hairline)] last:border-0 hover:opacity-100 transition-opacity">
-            <span className="num text-[11px] text-[var(--hq-text-ghost)] w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-            <p className="text-[var(--hq-text-dim)] text-[13px] leading-snug line-clamp-1 flex-1 group-hover:text-[var(--hq-text)] transition-colors">{d.text}</p>
-            <ChevronRight className="w-3.5 h-3.5 text-[var(--hq-text-ghost)] group-hover:text-[var(--hq-text-dim)] shrink-0 transition-all group-hover:translate-x-0.5" />
-          </a>
-        )) : <Empty>No pending drafts.</Empty>)}
-
-        {tab === "youtube" && (ytIdeas.length > 0 ? ytIdeas.map((it, idx) => (
-          <a key={idx} href="/youtube" className="group flex gap-3 items-center py-2 border-b border-[var(--hq-hairline)] last:border-0">
-            <span className="num text-[11px] text-[var(--hq-text-ghost)] w-5 shrink-0">{String(idx + 1).padStart(2, "0")}</span>
-            <p className="text-[var(--hq-text-dim)] text-[13px] font-medium line-clamp-1 flex-1 group-hover:text-[var(--hq-text)] transition-colors">{it.title}</p>
-            <ChevronRight className="w-3.5 h-3.5 text-[var(--hq-text-ghost)] group-hover:text-[var(--hq-text-dim)] shrink-0 transition-all group-hover:translate-x-0.5" />
-          </a>
-        )) : <Empty>No YouTube ideas yet.</Empty>)}
-
         {tab === "builds" && (buildIdeas.length > 0 ? buildIdeas.map((it, idx) => (
           <div key={idx} className="flex gap-3 items-center py-2 border-b border-[var(--hq-hairline)] last:border-0">
             <span className="num text-[11px] text-[var(--hq-text-ghost)] w-5 shrink-0">{String(idx + 1).padStart(2, "0")}</span>
@@ -215,126 +197,6 @@ function IdeasPanel({ sageDrafts, ytIdeas, buildIdeas }: {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[var(--hq-text-ghost)] text-[13px] py-8 text-center">{children}</p>;
-}
-
-// ── Top tweets ────────────────────────────────────────────
-function TopTweetsPanel({ tweets }: { tweets: Tweet[] }) {
-  return (
-    <div className="panel flex flex-col p-6 h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <Twitter className="w-3.5 h-3.5" style={{ color: "#38bdf8" }} />
-        <span className="eyebrow">Top Tweets · 7d</span>
-      </div>
-      {tweets.length === 0 ? <Empty>No tweet data yet</Empty> : (
-        <div className="space-y-0">
-          {tweets.slice(0, 3).map((t, i) => (
-            <a key={t.id} href={t.tweetUrl || "/x"} target="_blank" rel="noreferrer"
-              className="group flex gap-3 py-3 border-b border-[var(--hq-hairline)] last:border-0">
-              <span className="num text-[11px] text-[var(--hq-text-ghost)] w-5 shrink-0 mt-0.5">{String(i + 1).padStart(2, "0")}</span>
-              <div className="flex-1 min-w-0">
-                {t.text
-                  ? <p className="text-[var(--hq-text-dim)] text-[13px] leading-snug line-clamp-2 mb-1.5 group-hover:text-[var(--hq-text)] transition-colors">{t.text}</p>
-                  : <p className="text-[var(--hq-text-ghost)] text-[13px] italic mb-1.5">External tweet</p>}
-                <div className="flex items-center gap-3 text-[11px] num">
-                  <span className="text-[var(--hq-text)] font-semibold">{fmt(t.views)}<span className="text-[var(--hq-text-ghost)] font-normal"> views</span></span>
-                  <span className="text-[var(--hq-text-faint)]">{t.engRate.toFixed(1)}% eng</span>
-                  {t.postedAt && <span className="text-[var(--hq-text-ghost)]">{timeAgo(t.postedAt)}</span>}
-                </div>
-              </div>
-              <ArrowUpRight className="w-3.5 h-3.5 text-[var(--hq-text-ghost)] group-hover:text-[var(--hq-text-dim)] shrink-0 mt-0.5 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── X analytics panel ─────────────────────────────────────
-function XAnalyticsPanel({ views, trend, totalTweets, bestDay, bestHour }: {
-  views: number; trend: number[]; totalTweets: number; bestDay: string; bestHour: string;
-}) {
-  return (
-    <div className="panel flex flex-col p-6 h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <Twitter className="w-3.5 h-3.5" style={{ color: "#38bdf8" }} />
-        <span className="eyebrow">X Analytics</span>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <div className="eyebrow mb-2 !text-[9.5px]">Views · 7d</div>
-          <div className="num font-semibold text-[40px] leading-[0.95] tracking-[-0.02em] text-[var(--hq-text)]">{fmt(views)}</div>
-          {trend.some(v => v > 0) && <Sparkline data={trend} color="#38bdf8" area idSeed="xviews" className="h-9 mt-3" />}
-        </div>
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <div>
-            <div className="eyebrow mb-1.5 !text-[9.5px]">Tracked</div>
-            <div className="num font-semibold text-[18px] text-[var(--hq-text)]">{fmtExact(totalTweets)}</div>
-          </div>
-          <div>
-            <div className="eyebrow mb-1.5 !text-[9.5px]">Best window</div>
-            <div className="text-[13px] font-medium text-[var(--hq-text-dim)]">{bestDay}<span className="num"> · {bestHour}</span></div>
-          </div>
-        </div>
-      </div>
-      <a href="/x" className="mt-auto pt-4 flex items-center gap-1 text-[var(--hq-text-faint)] text-[11px] font-medium hover:text-[var(--hq-text-dim)] transition-colors group">
-        Open X dashboard <ArrowUpRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-      </a>
-    </div>
-  );
-}
-
-// ── YouTube ───────────────────────────────────────────────
-function YouTubeCard({ video, label }: { video: Video; label: string }) {
-  return (
-    <a href={video.url} target="_blank" rel="noreferrer" className="panel panel-interactive group flex flex-col overflow-hidden">
-      {video.thumbnail && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={video.thumbnail} alt={video.title} className="w-full aspect-video object-cover opacity-75 group-hover:opacity-100 transition-opacity" />
-      )}
-      <div className="p-4">
-        <div className="eyebrow mb-2" style={{ color: "#f87171" }}>{label}</div>
-        <p className="text-[var(--hq-text-dim)] text-[13px] font-medium line-clamp-2 leading-snug group-hover:text-[var(--hq-text)] transition-colors">{video.title}</p>
-        {video.publishedAt && <p className="num text-[var(--hq-text-ghost)] text-[11px] mt-2">{timeAgo(video.publishedAt)}</p>}
-      </div>
-    </a>
-  );
-}
-
-// ── YouTube: Top Performing vs Latest (tabbed) ────────────
-function YouTubeVideoTabs({ topVideo, latestVideo }: { topVideo: Video | null; latestVideo: Video | null }) {
-  const [tab, setTab] = useState<"top" | "latest">("top");
-  const video = tab === "top" ? (topVideo ?? latestVideo) : (latestVideo ?? topVideo);
-  if (!video) return null;
-  const Btn = ({ k, label }: { k: "top" | "latest"; label: string }) => (
-    <button
-      onClick={() => setTab(k)}
-      className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
-        tab === k ? "bg-white/[0.08] text-[var(--hq-text)]" : "text-[var(--hq-text-ghost)] hover:text-[var(--hq-text-dim)]"
-      }`}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div className="panel flex flex-col overflow-hidden">
-      <div className="flex items-center gap-1 p-2 border-b border-[var(--hq-hairline)]">
-        <span className="eyebrow ml-2 mr-1" style={{ color: "#f87171" }}>YouTube</span>
-        <Btn k="top" label="Top Performing" />
-        <Btn k="latest" label="Latest" />
-      </div>
-      <a href={video.url} target="_blank" rel="noreferrer" className="group block">
-        {video.thumbnail && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={video.thumbnail} alt={video.title} className="w-full aspect-video object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-        )}
-        <div className="p-4">
-          <p className="text-[var(--hq-text-dim)] text-[13px] font-medium line-clamp-2 leading-snug group-hover:text-[var(--hq-text)] transition-colors">{video.title}</p>
-          {video.publishedAt && <p className="num text-[var(--hq-text-ghost)] text-[11px] mt-2">{timeAgo(video.publishedAt)}</p>}
-        </div>
-      </a>
-    </div>
-  );
 }
 
 // ── Agents strip ──────────────────────────────────────────
@@ -473,12 +335,6 @@ export default function Dashboard() {
 
   if (!mounted) return null;
 
-  const xd = withDevPreview(snapDelta(data.snapshots, "xf"), data.xFollowers);
-  const ytd = withDevPreview(snapDelta(data.snapshots, "yt"), data.ytSubscribers);
-  const xViewsSeries = DEV_PREVIEW && !data.xViewsTrend.some(v => v > 0)
-    ? sampleSeries(data.xViewsThisWeek || 42000, 14)
-    : data.xViewsTrend;
-
   const stale = data.daysSincePost > 3 && data.daysSincePost < 999;
   const rise = (i: number) => ({ animationDelay: `${i * 60}ms` });
 
@@ -519,35 +375,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Platform stacks: X (with analytics) · YouTube (with video) ─ */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-          {/* X */}
-          <div className="flex flex-col gap-5 hq-rise" style={rise(1)}>
-            <MetricCard
-              label="X Followers" value={data.xFollowers} format={fmtExact}
-              delta={xd.delta} deltaPct={xd.deltaPct} deltaLabel={xd.label} trend={xd.series}
-              goal={data.xGoal} goalFormat={fmt}
-              icon={<Twitter className="w-4 h-4" />} accent="#38bdf8" href="/x" loaded={loaded}
-            />
-            <XAnalyticsPanel views={data.xViewsThisWeek} trend={xViewsSeries} totalTweets={data.totalTweets} bestDay={data.bestPostingDay} bestHour={data.bestPostingHourStr} />
-          </div>
-          {/* YouTube */}
-          <div className="flex flex-col gap-5 hq-rise" style={rise(2)}>
-            <MetricCard
-              label="YouTube Subscribers" value={data.ytSubscribers} format={fmtExact}
-              delta={ytd.delta} deltaPct={ytd.deltaPct} deltaLabel={ytd.label} trend={ytd.series}
-              goal={data.ytGoal} goalFormat={fmt}
-              icon={<Youtube className="w-4 h-4" />} accent="#f87171" href="/youtube" loaded={loaded}
-            />
-            {(data.topVideo || data.latestVideo) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {data.topVideo && <YouTubeCard video={data.topVideo} label="Top Performing" />}
-                {data.latestVideo && <YouTubeCard video={data.latestVideo} label="Latest" />}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* ── Brief + Approval inbox (side-by-side on wide) ─ */}
         <div className="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
           <div className="xl:col-span-2 hq-rise" style={rise(5)}>
@@ -562,8 +389,7 @@ export default function Dashboard() {
         <div className="mt-14">
           <SectionLabel>Signal</SectionLabel>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="hq-rise" style={rise(4)}><TopTweetsPanel tweets={data.topTweets} /></div>
-            <div className="hq-rise" style={rise(5)}><IdeasPanel sageDrafts={data.topSageDrafts} ytIdeas={data.topYoutubeIdeas} buildIdeas={data.topBuildIdeas} /></div>
+            <div className="hq-rise" style={rise(4)}><IdeasPanel sageDrafts={data.topSageDrafts} ytIdeas={data.topYoutubeIdeas} buildIdeas={data.topBuildIdeas} /></div>
           </div>
         </div>
 

@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   Home,
-  Twitter,
-  Play,
   Bot,
   Lightbulb,
   Flower2,
@@ -32,10 +30,8 @@ const navGroups = [
   {
     name: "Content",
     items: [
-      { href: "/x", label: "X", icon: Twitter },
       { href: "/content-os", label: "Pipeline", icon: Workflow },
       { href: "/articles", label: "Articles", icon: FileText },
-      { href: "/youtube", label: "YouTube", icon: Play },
     ],
   },
   {
@@ -58,8 +54,6 @@ const navGroups = [
 // Mobile tab bar - only show the 5 most important
 const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/x", label: "X", icon: Twitter },
-  { href: "/youtube", label: "YouTube", icon: Play },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/agents", label: "Agents", icon: Bot },
 ];
