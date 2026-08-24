@@ -212,6 +212,50 @@ async function gitCommitWiki(msg) {
   } catch { /* ignore */ }
 }
 
+/* ─────────────── Obsidian Vault (second brain) ─────────────── */
+const VAULT_DIR = process.env.HERMES_VAULT || path.join(os.homedir(), "JarvisVault");
+function parseWikiLinks(md) {
+  const links = new Set();
+  const re = /\[\[([^\]\|]+)(?:\|[^\]]+)?\]\]/g;
+  let m;
+  while ((m = re.exec(md))) links.add(m[1].trim().replace(/\.md$/, ""));
+  return [...links];
+}
+function titleFromMd(raw, rel) {
+  const fm = raw.match(/^---\n([\s\S]*?)\n---/);
+  if (fm) {
+    const t = fm[1].match(/^title:\s*(.+)$/m);
+    if (t) return t[1].trim();
+  }
+  const h1 = raw.match(/^#\s+(.+)$/m);
+  if (h1) return h1[1].trim();
+  return rel.replace(/\.md$/, "").split("/").pop();
+}
+async function mirrorVault() {
+  if (!fs.existsSync(VAULT_DIR)) { log("vault dir missing:", VAULT_DIR); return; }
+  const seen = new Set();
+  for (const file of walkMd(VAULT_DIR)) {
+    const rel = path.relative(VAULT_DIR, file).split(path.sep).join("/");
+    const id = rel.replace(/\.md$/, "");
+    seen.add(id);
+    let raw = ""; try { raw = fs.readFileSync(file, "utf8"); } catch { continue; }
+    const folder = rel.includes("/") ? rel.split("/")[0] : "";
+    const title = titleFromMd(raw, rel);
+    const links = parseWikiLinks(raw);
+    const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+    await q(
+      `INSERT INTO "VaultNode" (id, path, title, folder, body, links, "updatedAt", "syncedAt")
+       VALUES ($1,$2,$3,$4,$5,$6, now(), now())
+       ON CONFLICT (id) DO UPDATE SET path=EXCLUDED.path, title=EXCLUDED.title, folder=EXCLUDED.folder,
+         body=EXCLUDED.body, links=EXCLUDED.links, "syncedAt"=now()`,
+      [id, rel, title, folder, body, links]
+    );
+  }
+  if (seen.size) await q(`DELETE FROM "VaultNode" WHERE id <> ALL($1::text[])`, [[...seen]]);
+  else await q(`DELETE FROM "VaultNode"`);
+  log(`vault synced: ${seen.size} notes`);
+}
+
 /* ─────────────── Chief-of-staff daily brief ─────────────── */
 async function generateBriefing() {
   const raw = (await hermes(["-z", BRIEF_PROMPT], { timeout: RUN_TIMEOUT_MS })).trim();
@@ -295,6 +339,7 @@ async function mirrorTick() {
   try { await mirrorCrons(); } catch (e) { log("mirrorCrons err", e.message); }
   try { await mirrorHealth(); } catch (e) { log("mirrorHealth err", e.message); }
   try { await mirrorWiki(); } catch (e) { log("mirrorWiki err", e.message); }
+  try { await mirrorVault(); } catch (e) { log("mirrorVault err", e.message); }
   try { await mirrorCost(); } catch (e) { log("mirrorCost err", e.message); }
   try { await maybeDailyBrief(); } catch (e) { log("maybeDailyBrief err", e.message); }
 }

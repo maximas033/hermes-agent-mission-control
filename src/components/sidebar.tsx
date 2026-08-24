@@ -4,18 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  Home,
-  Bot,
-  Lightbulb,
-  Flower2,
-  FileText,
-  ClipboardList,
-  HeartPulse,
-  Cpu,
-  BookOpen,
-  Workflow,
-  Menu,
-  X,
+Home,
+Bot,
+Lightbulb,
+Flower2,
+FileText,
+ClipboardList,
+HeartPulse,
+Cpu,
+BookOpen,
+Workflow,
+Network,
+Menu,
+X,
 } from "lucide-react";
 
 const navGroups = [
@@ -45,6 +46,7 @@ const navGroups = [
     items: [
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
+      { href: "/vault", label: "Vault", icon: Network },
       { href: "/ideas", label: "Ideas", icon: Lightbulb },
       { href: "/garden", label: "Garden", icon: Flower2 },
     ],
