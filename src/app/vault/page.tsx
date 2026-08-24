@@ -8,13 +8,26 @@ type VEdge = { source: string; target: string };
 
 const FOLDERS = ["01-Profile", "02-Projects", "03-Journal", "04-Jarvis-Meta", "05-Knowledge"];
 const NEON: Record<string, string> = {
-  "01-Profile": "#22d3ee",     // cyan
-  "02-Projects": "#c084fc",    // purple
-  "03-Journal": "#34d399",     // green
-  "04-Jarvis-Meta": "#fbbf24", // amber
-  "05-Knowledge": "#fb7185",  // pink
+  "01-Profile": "#22d3ee",
+  "02-Projects": "#c084fc",
+  "03-Journal": "#34d399",
+  "04-Jarvis-Meta": "#fbbf24",
+  "05-Knowledge": "#fb7185",
 };
 const colorFor = (f: string) => NEON[f] || "#94a3b8";
+
+// fibonacci sphere -> evenly distributed unit vectors
+function fibSphere(n: number): { x: number; y: number; z: number }[] {
+  const pts: { x: number; y: number; z: number }[] = [];
+  const phi = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - (i / Math.max(1, n - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = phi * i;
+    pts.push({ x: Math.cos(th) * r, y, z: Math.sin(th) * r });
+  }
+  return pts;
+}
 
 export default function VaultPage() {
   const [nodes, setNodes] = useState<VNode[]>([]);
@@ -24,15 +37,14 @@ export default function VaultPage() {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sim = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
-  const view = useRef({ scale: 0.25, ox: 0, oy: 0, tx: 1, ty: 1, tox: 0, toy: 0 });
-  const targetScale = useRef(1);
-  const drag = useRef<{ node: number | null; panning: boolean; lx: number; ly: number }>(
-    { node: null, panning: false, lx: 0, ly: 0 }
-  );
+  const pos3 = useRef<{ x: number; y: number; z: number }[]>([]);
+  const view = useRef({ rotY: 0, rotX: -0.25, zoom: 1, R: 230 });
+  const drag = useRef<{ active: boolean; lx: number; ly: number; moved: boolean }>({ active: false, lx: 0, ly: 0, moved: false });
+  const autoRot = useRef(true);
   const raf = useRef<number>(0);
   const W = useRef(1000);
   const H = useRef(640);
+  const pick = useRef<{ id: number; d: number }>({ id: -1, d: 1e9 });
 
   useEffect(() => {
     fetch("/api/vault")
@@ -47,26 +59,10 @@ export default function VaultPage() {
     return s;
   }, []);
 
-  // Main render + simulation loop
   useEffect(() => {
     if (nodes.length === 0) return;
     const N = nodes.length;
-    const p = sim.current.length === N ? sim.current : nodes.map((_, i) => ({
-      x: Math.cos((i / N) * Math.PI * 2) * 260,
-      y: Math.sin((i / N) * Math.PI * 2) * 260,
-      vx: 0, vy: 0,
-    }));
-    sim.current = p;
-
-    const adj = new Map<number, number[]>();
-    edges.forEach((e) => {
-      const a = nodes.findIndex((n) => n.id === e.source);
-      const b = nodes.findIndex((n) => n.id === e.target);
-      if (a >= 0 && b >= 0) {
-        (adj.get(a) || adj.set(a, []).get(a)!).push(b);
-        (adj.get(b) || adj.set(b, []).get(b)!).push(a);
-      }
-    });
+    pos3.current = fibSphere(N);
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -81,127 +77,131 @@ export default function VaultPage() {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    // initial "Simpson zoom" — start zoomed in, ease out to fit
-    view.current.scale = 0.2; targetScale.current = 1;
-    view.current.tx = 0.2; view.current.ty = 1; view.current.tox = 1; view.current.toy = 0;
-
-    const screenToWorld = (sx: number, sy: number) => ({
-      x: (sx - W.current / 2 - view.current.ox) / view.current.scale,
-      y: (sy - H.current / 2 - view.current.oy) / view.current.scale,
-    });
+    const screenOf = (i: number) => {
+      const p = pos3.current[i];
+      const cy = Math.cos(view.current.rotX), sy = Math.sin(view.current.rotX);
+      const cy2 = Math.cos(view.current.rotY), sy2 = Math.sin(view.current.rotY);
+      // rotate Y then X
+      let x = p.x * cy2 + p.z * sy2;
+      let z = -p.x * sy2 + p.z * cy2;
+      let y = p.y * cy - z * sy;
+      z = p.y * sy + z * cy;
+      const R = view.current.R * view.current.zoom;
+      const persp = 1.15 / (1.15 + z); // simple perspective
+      return {
+        x: W.current / 2 + x * R * persp,
+        y: H.current / 2 + y * R * persp,
+        depth: z, // -1 back .. +1 front
+        scale: persp,
+      };
+    };
 
     const hitTest = (sx: number, sy: number) => {
-      const w = screenToWorld(sx, sy);
-      for (let i = N - 1; i >= 0; i--) {
-        const dx = p[i].x - w.x, dy = p[i].y - w.y;
-        if (dx * dx + dy * dy < 400) return i;
+      let best = -1, bd = 1e9;
+      for (let i = 0; i < N; i++) {
+        const s = screenOf(i);
+        if (s.depth < -0.15) continue; // back side harder to pick
+        const dx = s.x - sx, dy = s.y - sy;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = i; }
       }
-      return null;
+      return bd < 900 ? best : -1;
     };
 
     const onMove = (ev: MouseEvent) => {
       const r = canvas.getBoundingClientRect();
       const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
-      if (drag.current.node !== null) {
-        const w = screenToWorld(sx, sy);
-        p[drag.current.node].x = w.x; p[drag.current.node].y = w.y;
-        p[drag.current.node].vx = 0; p[drag.current.node].vy = 0;
-      } else if (drag.current.panning) {
-        view.current.ox += sx - drag.current.lx; view.current.oy += sy - drag.current.ly;
-        view.current.tox = view.current.scale; // pause zoom anim while panning
-        drag.current.lx = sx; drag.current.ly = sy;
+      if (drag.current.active) {
+        const dx = sx - drag.current.lx, dy = sy - drag.current.ly;
+        view.current.rotY += dx * 0.006; view.current.rotX += dy * 0.006;
+        drag.current.lx = sx; drag.current.ly = sy; drag.current.moved = true;
+        autoRot.current = false;
       } else {
         const h = hitTest(sx, sy);
-        setHovered(h !== null ? nodes[h].id : null);
-        canvas.style.cursor = h !== null ? "pointer" : "grab";
+        setHovered(h >= 0 ? nodes[h].id : null);
+        canvas.style.cursor = h >= 0 ? "pointer" : "grab";
       }
     };
     const onDown = (ev: MouseEvent) => {
       const r = canvas.getBoundingClientRect();
-      const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
-      const h = hitTest(sx, sy);
-      if (h !== null) { drag.current.node = h; drag.current.lx = sx; drag.current.ly = sy; }
-      else { drag.current.panning = true; drag.current.lx = sx; drag.current.ly = sy; }
+      drag.current = { active: true, lx: ev.clientX - r.left, ly: ev.clientY - r.top, moved: false };
     };
     const onUp = (ev: MouseEvent) => {
       const r = canvas.getBoundingClientRect();
       const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
-      if (drag.current.node !== null) {
+      if (drag.current.active && !drag.current.moved) {
         const h = hitTest(sx, sy);
-        if (h !== null) setSelected(nodes[h]);
+        if (h >= 0) setSelected(nodes[h]);
       }
-      drag.current.node = null; drag.current.panning = false;
+      drag.current.active = false;
     };
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
-      const r = canvas.getBoundingClientRect();
-      const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
-      const before = screenToWorld(sx, sy);
-      const factor = Math.exp(-ev.deltaY * 0.0015);
-      targetScale.current = Math.max(0.2, Math.min(3.5, targetScale.current * factor));
-      view.current.scale = targetScale.current;
-      // keep cursor point stable
-      view.current.ox = sx - W.current / 2 - before.x * targetScale.current;
-      view.current.oy = sy - H.current / 2 - before.y * targetScale.current;
+      view.current.zoom = Math.max(0.45, Math.min(2.6, view.current.zoom * Math.exp(-ev.deltaY * 0.0012)));
     };
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
+    let t = 0;
     const draw = () => {
-      // ease zoom + pan
-      view.current.scale += (targetScale.current - view.current.scale) * 0.12;
-      view.current.ox += (view.current.tox - view.current.ox) * 0.12;
-      view.current.oy += (view.current.toy - view.current.oy) * 0.12;
-
+      t += 0.016;
+      if (autoRot.current && !drag.current.active) view.current.rotY += 0.0022;
       ctx.clearRect(0, 0, W.current, H.current);
-      // bg grid glow
-      ctx.fillStyle = "#06070a"; ctx.fillRect(0, 0, W.current, H.current);
-
-      const s = view.current.scale;
-      const toScreen = (x: number, y: number) => ({
-        x: W.current / 2 + view.current.ox + x * s,
-        y: H.current / 2 + view.current.oy + y * s,
-      });
+      ctx.fillStyle = "#05060a"; ctx.fillRect(0, 0, W.current, H.current);
 
       const nb = neighborsOf(selected?.id || hovered, edges);
+      const sel = selected?.id || hovered;
 
-      // edges
-      ctx.lineWidth = 1;
-      edges.forEach((e) => {
+      // edges (pulsing)
+      edges.forEach((e, ei) => {
         const a = nodes.findIndex((n) => n.id === e.source);
         const b = nodes.findIndex((n) => n.id === e.target);
         if (a < 0 || b < 0) return;
-        const pa = toScreen(p[a].x, p[a].y), pb = toScreen(p[b].x, p[b].y);
-        const active = (selected || hovered) && (e.source === (selected?.id || hovered) || e.target === (selected?.id || hovered));
-        ctx.strokeStyle = active ? "rgba(120,220,255,0.55)" : "rgba(80,120,160,0.18)";
-        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+        const sa = screenOf(a), sb = screenOf(b);
+        const active = sel && (e.source === sel || e.target === sel);
+        const pulse = 0.32 + 0.22 * Math.sin(t * 2.2 + ei * 0.7);
+        const depthAvg = (sa.depth + sb.depth) / 2;
+        let alpha = pulse * (0.45 + 0.55 * ((depthAvg + 1) / 2));
+        if (sel && !active) alpha *= 0.18;
+        if (active) alpha = Math.min(1, pulse + 0.4);
+        const front = (sa.depth + sb.depth) / 2 > 0;
+        ctx.strokeStyle = active
+          ? `rgba(140,230,255,${alpha})`
+          : front ? `rgba(90,150,200,${alpha})` : `rgba(70,100,140,${alpha * 0.6})`;
+        ctx.lineWidth = active ? 1.6 : 1;
+        ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
       });
 
       // nodes
       for (let i = 0; i < N; i++) {
-        const ps = toScreen(p[i].x, p[i].y);
+        const s = screenOf(i);
         const c = colorFor(nodes[i].folder);
         const isSel = selected?.id === nodes[i].id;
         const isHov = hovered === nodes[i].id;
-        const dim = (selected || hovered) && !nb.has(nodes[i].id);
-        const rad = isSel ? 9 : 6;
-        ctx.globalAlpha = dim ? 0.28 : 1;
-        // glow
-        ctx.shadowColor = c; ctx.shadowBlur = isSel ? 22 : isHov ? 16 : 9;
+        const dim = (sel) && !nb.has(nodes[i].id);
+        const depthN = (s.depth + 1) / 2; // 0 back .. 1 front
+        const rad = (isSel ? 8 : 5.5) * (0.7 + 0.5 * depthN);
+        let alpha = 0.35 + 0.65 * depthN;
+        if (dim) alpha *= 0.25;
+        // pulse glow on front nodes
+        const glow = (isSel ? 24 : isHov ? 18 : 8 + 6 * (0.5 + 0.5 * Math.sin(t * 2 + i))) * (0.6 + 0.4 * depthN);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = c; ctx.shadowBlur = glow;
         ctx.fillStyle = c;
-        ctx.beginPath(); ctx.arc(ps.x, ps.y, rad, 0, Math.PI * 2); ctx.fill();
-        // halo ring
+        ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = isSel ? "#ffffff" : c; ctx.lineWidth = isSel ? 2 : 1;
-        ctx.beginPath(); ctx.arc(ps.x, ps.y, rad + 3, 0, Math.PI * 2); ctx.stroke();
-        // label
-        if (!dim && (s > 0.5 || isSel || isHov || nb.has(nodes[i].id))) {
-          const t = nodes[i].title.length > 20 ? nodes[i].title.slice(0, 20) + "…" : nodes[i].title;
+        if (isSel || isHov) {
+          ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(s.x, s.y, rad + 3, 0, Math.PI * 2); ctx.stroke();
+        }
+        // labels for front/selected
+        if (!dim && (s.depth > 0.15 || isSel || isHov || nb.has(nodes[i].id))) {
+          const tt = nodes[i].title.length > 18 ? nodes[i].title.slice(0, 18) + "…" : nodes[i].title;
           ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-          ctx.fillStyle = isSel || isHov ? "#e6f6ff" : "rgba(190,210,230,0.8)";
-          ctx.fillText(t, ps.x + rad + 5, ps.y + 3.5);
+          ctx.fillStyle = isSel || isHov ? "#eaffff" : "rgba(195,220,240,0.85)";
+          ctx.fillText(tt, s.x + rad + 5, s.y + 3.5);
         }
         ctx.globalAlpha = 1;
       }
@@ -210,35 +210,8 @@ export default function VaultPage() {
     };
     raf.current = requestAnimationFrame(draw);
 
-    // physics tick (separate interval for stability)
-    const phys = setInterval(() => {
-      for (let i = 0; i < N; i++) {
-        if (drag.current.node === i) continue;
-        let fx = 0, fy = 0;
-        for (let j = 0; j < N; j++) {
-          if (i === j) continue;
-          let dx = p[i].x - p[j].x, dy = p[i].y - p[j].y;
-          let d2 = dx * dx + dy * dy + 0.01;
-          const f = 7000 / d2; fx += (dx / Math.sqrt(d2)) * f; fy += (dy / Math.sqrt(d2)) * f;
-        }
-        for (const j of adj.get(i) || []) {
-          let dx = p[j].x - p[i].x, dy = p[j].y - p[i].y;
-          const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-          const f = (d - 95) * 0.02; fx += (dx / d) * f; fy += (dy / d) * f;
-        }
-        fx += -p[i].x * 0.004; fy += -p[i].y * 0.004;
-        p[i].vx = (p[i].vx + fx) * 0.86; p[i].vy = (p[i].vy + fy) * 0.86;
-      }
-      for (let i = 0; i < N; i++) {
-        if (drag.current.node === i) continue;
-        p[i].x = Math.max(-900, Math.min(900, p[i].x + p[i].vx * 0.12));
-        p[i].y = Math.max(-700, Math.min(700, p[i].y + p[i].vy * 0.12));
-      }
-    }, 32);
-
     return () => {
-      cancelAnimationFrame(raf.current); clearInterval(phys);
-      ro.disconnect();
+      cancelAnimationFrame(raf.current); ro.disconnect();
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
@@ -254,7 +227,7 @@ export default function VaultPage() {
             Obsidian Vault
           </h1>
           <p className="num text-[var(--hq-text-ghost)] text-[12.5px] mt-1">
-            {nodes.length} notes · {edges.length} links · drag nodes · scroll to zoom · click to open
+            {nodes.length} notes · {edges.length} links · drag to spin · scroll to zoom · click to open
           </p>
         </div>
         <Link href="/" className="text-[12px] text-[var(--hq-text-dim)] hover:text-[var(--hq-text)]">← Dashboard</Link>
@@ -265,7 +238,7 @@ export default function VaultPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
           <div className="panel p-0 overflow-hidden" style={{ borderColor: "rgba(80,220,255,0.18)" }}>
-            <canvas ref={canvasRef} className="w-full block" style={{ height: 640, cursor: "grab", background: "#06070a" }} />
+            <canvas ref={canvasRef} className="w-full block" style={{ height: 640, cursor: "grab", background: "#05060a" }} />
           </div>
 
           <div className="panel p-5 flex flex-col" style={{ borderColor: "rgba(80,220,255,0.18)" }}>
@@ -280,10 +253,11 @@ export default function VaultPage() {
                   {selected.preview || "(no body)"}
                 </p>
                 <p className="num text-[10.5px] text-[var(--hq-text-ghost)] mt-3">{selected.path}</p>
+                <button onClick={() => setSelected(null)} className="mt-3 text-[12px] text-[var(--hq-text-dim)] hover:text-[var(--hq-text)]">✕ clear selection</button>
               </>
             ) : (
               <div className="text-[var(--hq-text-ghost)] text-[13px]">
-                Click a node to read the note. Drag to rearrange, scroll to zoom.
+                A rotating knowledge sphere. Drag to spin, scroll to zoom, click a node to read the note.
                 <div className="mt-4 space-y-1.5">
                   {FOLDERS.map((f) => (
                     <div key={f} className="flex items-center gap-2 text-[12px]">
