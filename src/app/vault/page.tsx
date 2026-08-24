@@ -155,23 +155,42 @@ export default function VaultPage() {
       const sel = selected?.id || hovered;
 
       // edges (pulsing)
+      // convert neon hex -> "r,g,b"
+      const rgb = (hex: string) => {
+        const h = hex.replace("#", "");
+        const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+        return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+      };
+
       edges.forEach((e, ei) => {
         const a = nodes.findIndex((n) => n.id === e.source);
         const b = nodes.findIndex((n) => n.id === e.target);
         if (a < 0 || b < 0) return;
         const sa = screenOf(a), sb = screenOf(b);
         const active = sel && (e.source === sel || e.target === sel);
-        const pulse = 0.32 + 0.22 * Math.sin(t * 2.2 + ei * 0.7);
         const depthAvg = (sa.depth + sb.depth) / 2;
-        let alpha = pulse * (0.45 + 0.55 * ((depthAvg + 1) / 2));
-        if (sel && !active) alpha *= 0.18;
-        if (active) alpha = Math.min(1, pulse + 0.4);
-        const front = (sa.depth + sb.depth) / 2 > 0;
-        ctx.strokeStyle = active
-          ? `rgba(140,230,255,${alpha})`
-          : front ? `rgba(90,150,200,${alpha})` : `rgba(70,100,140,${alpha * 0.6})`;
-        ctx.lineWidth = active ? 1.6 : 1;
+        // "thinking" pulse — base breathing + a faster flicker so the net feels alive
+        const breathe = 0.45 + 0.28 * Math.sin(t * 1.8 + ei * 0.6);
+        const flicker = 0.12 * Math.sin(t * 6.0 + ei * 1.3);
+        let alpha = breathe + flicker;
+        alpha *= 0.5 + 0.5 * ((depthAvg + 1) / 2); // front brighter
+        let col = rgb(colorFor(nodes[a].folder));
+        if (sel && !active) alpha *= 0.55;          // soft, not black-out
+        if (active) alpha = Math.min(1, alpha + 0.45);
+        ctx.strokeStyle = active ? `rgba(170,240,255,${alpha})` : `rgba(${col},${alpha})`;
+        ctx.lineWidth = active ? 2.1 : 1.1;
+        ctx.shadowColor = active ? "rgba(170,240,255,0.9)" : `rgba(${col},0.7)`;
+        ctx.shadowBlur = active ? 10 : 5;
         ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+        ctx.shadowBlur = 0;
+        // traveling shimmer dot (the "thought" moving along the link)
+        const ph = (t * 0.35 + ei * 0.13) % 1;
+        const px = sa.x + (sb.x - sa.x) * ph, py = sa.y + (sb.y - sa.y) * ph;
+        const sCol = rgb(colorFor(nodes[b].folder));
+        ctx.fillStyle = `rgba(${sCol},${0.5 + 0.4 * Math.sin(t * 5 + ei)})`;
+        ctx.shadowColor = `rgba(${sCol},0.9)`; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(px, py, active ? 2.6 : 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
       });
 
       // nodes
@@ -180,31 +199,41 @@ export default function VaultPage() {
         const c = colorFor(nodes[i].folder);
         const isSel = selected?.id === nodes[i].id;
         const isHov = hovered === nodes[i].id;
-        const dim = (sel) && !nb.has(nodes[i].id);
+        const inFocus = isHov || isSel || (sel && nb.has(nodes[i].id));
         const depthN = (s.depth + 1) / 2; // 0 back .. 1 front
-        const rad = (isSel ? 8 : 5.5) * (0.7 + 0.5 * depthN);
-        let alpha = 0.35 + 0.65 * depthN;
-        if (dim) alpha *= 0.25;
-        // pulse glow on front nodes
-        const glow = (isSel ? 24 : isHov ? 18 : 8 + 6 * (0.5 + 0.5 * Math.sin(t * 2 + i))) * (0.6 + 0.4 * depthN);
+        const rad = (isSel ? 9 : isHov ? 8 : 6) * (0.72 + 0.5 * depthN);
+        // vibrant: bright base, front nodes near full
+        let alpha = 0.55 + 0.45 * depthN;
+        if (isHov || isSel) alpha = 1;
+        // pulsing glow so each node breathes
+        const breathe = 1 + 0.18 * Math.sin(t * 2.4 + i * 0.9);
+        const glow = (isSel ? 30 : isHov ? 26 : 12 * breathe) * (0.65 + 0.45 * depthN);
+        const col = rgb(c);
         ctx.globalAlpha = alpha;
-        ctx.shadowColor = c; ctx.shadowBlur = glow;
-        ctx.fillStyle = c;
+        // outer aura
+        ctx.shadowColor = `rgba(${col},1)`; ctx.shadowBlur = glow;
+        ctx.fillStyle = `rgb(${col})`;
         ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-        if (isSel || isHov) {
+        // bright white-hot core on hover/select
+        if (isHov || isSel) {
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.beginPath(); ctx.arc(s.x, s.y, rad * 0.42, 0, Math.PI * 2); ctx.fill();
           ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(s.x, s.y, rad + 3, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(s.x, s.y, rad + 4, 0, Math.PI * 2); ctx.stroke();
         }
-        // labels for front/selected
-        if (!dim && (s.depth > 0.15 || isSel || isHov || nb.has(nodes[i].id))) {
+        ctx.shadowBlur = 0;
+        // labels: brighter when in focus, but NOT hidden for others
+        const showLabel = s.depth > 0.05 || inFocus;
+        if (showLabel) {
           const tt = nodes[i].title.length > 18 ? nodes[i].title.slice(0, 18) + "…" : nodes[i].title;
-          ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-          ctx.fillStyle = isSel || isHov ? "#eaffff" : "rgba(195,220,240,0.85)";
+          ctx.font = (isHov || isSel ? "bold " : "") + "11px ui-sans-serif, system-ui, sans-serif";
+          ctx.fillStyle = inFocus ? "#f0ffff" : "rgba(200,225,245,0.8)";
           ctx.fillText(tt, s.x + rad + 5, s.y + 3.5);
         }
         ctx.globalAlpha = 1;
       }
+
 
       raf.current = requestAnimationFrame(draw);
     };
