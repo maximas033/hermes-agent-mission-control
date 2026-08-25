@@ -52,7 +52,21 @@ export default function VaultPage() {
             Vault Memory Graph
           </h1>
           <p className="num mt-1 text-[12.5px] text-[var(--hq-text-ghost)]">
-            {nodes.length} notes · {edges.length} thought-links · force-directed in 3D space
+            {nodes.length} notes · {edges.length} thought-links
+          </p>
+          <p className="num mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+            <span className="inline-flex items-center gap-1.5" style={{ color: "#bff3ff" }}>
+              <span className="inline-block h-[2px] w-4 rounded" style={{ background: "#bff3ff" }} />
+              wikilink
+            </span>
+            <span className="inline-flex items-center gap-1.5" style={{ color: "#ffd27a" }}>
+              <span className="inline-block h-[2px] w-4 rounded" style={{ background: "#ffd27a" }} />
+              shared tag
+            </span>
+            <span className="inline-flex items-center gap-1.5" style={{ color: "#b7a6ff" }}>
+              <span className="inline-block h-[2px] w-4 rounded" style={{ background: "#b7a6ff" }} />
+              title mention
+            </span>
           </p>
         </div>
         <Link href="/" className="text-[12px] text-[var(--hq-text-dim)] hover:text-[var(--hq-text)]">

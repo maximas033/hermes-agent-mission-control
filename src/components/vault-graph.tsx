@@ -33,6 +33,7 @@ export interface VaultNodeDatum {
 export interface VaultEdgeDatum {
   source: string;
   target: string;
+  kind: "link" | "tag" | "mention";
 }
 
 interface LaidNode extends VaultNodeDatum {
@@ -252,6 +253,7 @@ function GraphScene({ laid, edges, posById, selectedId, onSelect }: SceneProps) 
         .map((e) => ({
           a: idxOf.get(e.source) ?? -1,
           b: idxOf.get(e.target) ?? -1,
+          kind: e.kind,
         }))
         .filter((p) => p.a >= 0 && p.b >= 0),
     [edges, idxOf]
@@ -294,7 +296,9 @@ function GraphScene({ laid, edges, posById, selectedId, onSelect }: SceneProps) 
         linePos[ei * 6 + 3] = bx; linePos[ei * 6 + 4] = by; linePos[ei * 6 + 5] = bz;
 
         const active = !focusId || laid[a].id === focusId || laid[b].id === focusId;
-        tmpColor.set(active ? "#bff3ff" : folderColor(laid[a].folder));
+        const kindCol =
+          edgePairs[ei].kind === "link" ? "#bff3ff" : edgePairs[ei].kind === "tag" ? "#ffd27a" : "#b7a6ff";
+        tmpColor.set(active ? kindCol : folderColor(laid[a].folder));
         const k = (active ? 1 : dimK) * (active ? 1 : 0.75);
         lineCol[ei * 6 + 0] = tmpColor.r * k;
         lineCol[ei * 6 + 1] = tmpColor.g * k;
@@ -312,7 +316,9 @@ function GraphScene({ laid, edges, posById, selectedId, onSelect }: SceneProps) 
     if (pg) {
       for (let ei = 0; ei < edgePairs.length; ei++) {
         const { a, b } = edgePairs[ei];
-        const ph = (pulsePhase[ei] + t * 0.16) % 1;
+        const speed =
+          edgePairs[ei].kind === "link" ? 0.16 : edgePairs[ei].kind === "tag" ? 0.09 : 0.05;
+        const ph = (pulsePhase[ei] + t * speed) % 1;
         pulsePos[ei * 3 + 0] = dispPos[a * 3] + (dispPos[b * 3] - dispPos[a * 3]) * ph;
         pulsePos[ei * 3 + 1] = dispPos[a * 3 + 1] + (dispPos[b * 3 + 1] - dispPos[a * 3 + 1]) * ph;
         pulsePos[ei * 3 + 2] = dispPos[a * 3 + 2] + (dispPos[b * 3 + 2] - dispPos[a * 3 + 2]) * ph;
