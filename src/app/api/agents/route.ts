@@ -90,19 +90,51 @@ const DEFAULT_AGENTS = [
 
 export async function GET() {
   try {
-    const states = await prisma.agentState.findMany();
-    const stateMap: Record<string, any> = {};
-    for (const s of states) {
-      stateMap[s.id] = s;
+    // Merge persisted agentState (if DB available) with LIVE activity from the bus.
+    let stateMap: Record<string, any> = {};
+    try {
+      const states = await prisma.agentState.findMany();
+      for (const s of states) stateMap[s.id] = s;
+    } catch {
+      // DB may be unavailable (e.g. Vercel without DATABASE_URL) — fall back to live activity only
+    }
+
+    // Live activity: which agents have run recently? (drives working/idle in the office)
+    const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+    let liveActivity: Record<string, number> = {}; // agentId/slug -> last activity ts
+    try {
+      const actRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")}/api/hermes/activity`,
+        { cache: "no-store" }
+      );
+      if (actRes.ok) {
+        const act = await actRes.json();
+        const now = Date.now();
+        for (const ev of act.events || []) {
+          const m = (ev.title || "").match(/(?:Started|Failed|Finished|Completed|Done):\s*([A-Za-z ]+?):/);
+          if (!m) continue;
+          const slug = m[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          const ts = Date.parse(ev.createdAt || "");
+          if (!Number.isFinite(ts)) continue;
+          // Map known agent display names → ids
+          const id = AGENT_NAME_TO_ID[slug] || slug;
+          if (!liveActivity[id] || ts > liveActivity[id]) liveActivity[id] = ts;
+        }
+      }
+    } catch {
+      // activity feed unreachable — keep static/DB state
     }
 
     const agents = DEFAULT_AGENTS.map((agent) => {
       const s = stateMap[agent.id] || {};
+      const lastTs = liveActivity[agent.id];
+      const isLiveActive = typeof lastTs === "number" && Date.now() - lastTs < ACTIVE_WINDOW_MS;
+      const status = isLiveActive ? "working" : s.status || agent.status;
       return {
         ...agent,
-        status: s.status || agent.status,
-        currentTask: s.currentTask || undefined,
-        lastActive: s.lastActive || undefined,
+        status,
+        currentTask: s.currentTask || (isLiveActive ? "active" : undefined),
+        lastActive: s.lastActive || (typeof lastTs === "number" ? new Date(lastTs).toISOString() : undefined),
         tasksCompleted: s.tasksCompleted || agent.tasksCompleted,
         totalCost: s.totalCost || agent.totalCost,
         recentActivity: s.recentActivity || agent.recentActivity,
@@ -117,6 +149,19 @@ export async function GET() {
     return NextResponse.json(DEFAULT_AGENTS, { status: 200 });
   }
 }
+
+// Display-name (from activity titles) → canonical agent id used in DEFAULT_AGENTS
+const AGENT_NAME_TO_ID: Record<string, string> = {
+  jarvis: "jarvis",
+  sentinel: "1540945637946687498",
+  nightowl: "1540945774165233774",
+  techwire: "1540960420838510752",
+  quotron: "1541170172167987353",
+  "master-coder": "1541138550299566123",
+  "nightly-orchestrator": "1541138552358965348",
+  "skill-forger": "1541138553243697296",
+};
+
 
 // POST to update agent state (called by cron jobs)
 export async function POST(request: Request) {
