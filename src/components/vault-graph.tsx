@@ -337,10 +337,10 @@ function GraphScene({ laid, edges, posById, selectedId, onSelect }: SceneProps) 
         enableDamping
         dampingFactor={0.07}
         rotateSpeed={0.72}
-        zoomSpeed={1.15}
-        panSpeed={0.7}
-        minDistance={2.2}
-        maxDistance={160}
+        zoomSpeed={1.5}
+        panSpeed={1}
+        minDistance={0.5}
+        maxDistance={Infinity}
         autoRotate
         autoRotateSpeed={0.35}
       />

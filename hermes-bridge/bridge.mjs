@@ -154,12 +154,16 @@ function parseEntry(md) {
   }
   return { fm, body: body.trim() };
 }
+const SKIP_DIRS = new Set([
+  ".git", ".obsidian", ".trash", "node_modules", ".venv", "venv",
+  "__pycache__", "dist", "build", ".next", ".vercel", "coverage",
+]);
 function walkMd(dir, out = []) {
   let items = [];
   try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const it of items) {
     const full = path.join(dir, it.name);
-    if (it.isDirectory()) { if (it.name !== ".git") walkMd(full, out); }
+    if (it.isDirectory()) { if (!SKIP_DIRS.has(it.name)) walkMd(full, out); }
     else if (it.name.endsWith(".md") && it.name !== "INDEX.md") out.push(full);
   }
   return out;
