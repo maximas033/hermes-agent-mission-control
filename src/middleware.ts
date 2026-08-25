@@ -21,6 +21,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public agent roster (GET only). Non-sensitive: names/roles/status derived
+  // from the shared Neon bus. Writes (POST) stay protected below.
+  if (pathname === '/api/agents' && request.method === 'GET') {
+    return NextResponse.next();
+  }
+
   // Allow internal agent calls with shared secret
   const internalSecret = request.headers.get('x-internal-secret');
   if (internalSecret && internalSecret === process.env.INTERNAL_API_SECRET) {

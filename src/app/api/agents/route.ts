@@ -100,29 +100,49 @@ export async function GET() {
     }
 
     // Live activity: which agents have run recently? (drives working/idle in the office)
+    // Source of truth = the shared Neon bus (AgentEvent), written by the bridge on every
+    // run. This works whether the Mac is awake or not. The LAN activity endpoint is used
+    // only as a secondary fallback if the table is empty.
     const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
     let liveActivity: Record<string, number> = {}; // agentId/slug -> last activity ts
-    try {
-      const actRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")}/api/hermes/activity`,
-        { cache: "no-store" }
-      );
-      if (actRes.ok) {
-        const act = await actRes.json();
-        const now = Date.now();
-        for (const ev of act.events || []) {
-          const m = (ev.title || "").match(/(?:Started|Failed|Finished|Completed|Done):\s*([A-Za-z ]+?):/);
-          if (!m) continue;
-          const slug = m[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-          const ts = Date.parse(ev.createdAt || "");
-          if (!Number.isFinite(ts)) continue;
-          // Map known agent display names → ids
-          const id = AGENT_NAME_TO_ID[slug] || slug;
-          if (!liveActivity[id] || ts > liveActivity[id]) liveActivity[id] = ts;
-        }
+
+    const ingestEvents = (events: { title?: string | null; createdAt?: string | Date }[]) => {
+      for (const ev of events || []) {
+        const m = (ev.title || "").match(/(?:Started|Failed|Finished|Completed|Done):\s*([A-Za-z ]+?):/);
+        if (!m) continue;
+        const slug = m[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const ts = Date.parse(ev.createdAt ? new Date(ev.createdAt).toISOString() : "");
+        if (!Number.isFinite(ts)) continue;
+        const id = AGENT_NAME_TO_ID[slug] || slug;
+        if (!liveActivity[id] || ts > liveActivity[id]) liveActivity[id] = ts;
       }
+    };
+
+    // PRIMARY: read AgentEvent directly from Neon (bridge already mirrors all runs).
+    try {
+      const events = await prisma.agentEvent.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 80,
+      });
+      ingestEvents(events as { title?: string | null; createdAt?: string | Date }[]);
     } catch {
-      // activity feed unreachable — keep static/DB state
+      // Neon table unavailable — fall through to LAN fallback
+    }
+
+    // SECONDARY: LAN activity endpoint (Mac must be awake + same network).
+    if (Object.keys(liveActivity).length === 0) {
+      try {
+        const actRes = await fetch(
+          `${process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")}/api/hermes/activity`,
+          { cache: "no-store" }
+        );
+        if (actRes.ok) {
+          const act = await actRes.json();
+          ingestEvents(act.events || []);
+        }
+      } catch {
+        // activity feed unreachable — keep static/DB state
+      }
     }
 
     const agents = DEFAULT_AGENTS.map((agent) => {

@@ -116,16 +116,19 @@ function AgentFigure({
     if (!group.current || !bodyRef.current) return;
     const t = state.clock.elapsedTime;
     if (isWorking) {
-      // typing motion: slight lean forward + bob
-      group.current.position.y = Math.abs(Math.sin(t * 4)) * 0.02;
-      bodyRef.current.rotation.x = 0.12 + Math.sin(t * 8) * 0.02;
+      // active typing: rapid small bob + forward lean, hands on keyboard
+      group.current.position.y = Math.abs(Math.sin(t * 5)) * 0.025;
+      bodyRef.current.rotation.x = 0.14 + Math.sin(t * 9) * 0.03;
+      group.current.rotation.y = 0;
     } else if (isIdle) {
-      // relaxed breathing
-      group.current.position.y = Math.sin(t * 1.4) * 0.008;
-      bodyRef.current.rotation.x = 0;
+      // alive at the desk: gentle breathing + slow glance side to side
+      group.current.position.y = Math.sin(t * 1.6) * 0.02;
+      bodyRef.current.rotation.x = Math.sin(t * 1.6) * 0.03;
+      group.current.rotation.y = Math.sin(t * 0.5) * 0.18;
     } else {
       group.current.position.y = 0;
       bodyRef.current.rotation.x = 0;
+      group.current.rotation.y = 0;
     }
   });
 
@@ -293,21 +296,25 @@ function OfficeScene({ agents }: { agents: Agent[] }) {
   const WORK_RADIUS = 5.2;
   const floorTex = useFloorTexture();
 
-  const workingAgents = agents.filter(
-    (a) => a.status === "working" || a.status === "active" || a.status === "online"
-  );
+  // Present = show up at a desk and look alive. Only truly offline/error agents
+  // get banished to the break room. Working agents are "active"; everyone else
+  // still sits at their desk and breathes/glances (never just parked idle).
+  const isPresent = (a: Agent) =>
+    a.status !== "offline" && a.status !== "error";
+  const presentAgents = agents.filter(isPresent);
+  const offlineAgents = agents.filter((a) => !isPresent(a));
 
-  // seat working agents at desks around half-circle facing center
+  // Seat every present agent around a FULL ring (so idle cron agents still sit
+  // at their desk in the office, not the lounge). Working = active typing.
   const deskSlots = useMemo(() => {
-    const n = Math.max(workingAgents.length, 1);
-    return workingAgents.map((a, i) => {
-      const spread = Math.min(Math.PI * 0.9, (n / 8) * Math.PI * 0.9);
+    const n = Math.max(presentAgents.length, 1);
+    return presentAgents.map((a, i) => {
+      // spread across ~300° so the ring stays open toward camera
+      const spread = Math.min(Math.PI * 1.7, (n / 8) * Math.PI * 1.7);
       const angle = -Math.PI / 2 + (n === 1 ? 0 : (i / (n - 1)) * spread - spread / 2);
       return { agent: a, angle };
     });
-  }, [workingAgents]);
-
-  const idleAgents = agents.filter((a) => !deskSlots.some((d) => d.agent.id === a.id));
+  }, [presentAgents]);
 
   return (
     <>
@@ -441,8 +448,8 @@ function OfficeScene({ agents }: { agents: Agent[] }) {
         <Label text="☕ BREAK ROOM" color="#7dd3fc" position={[0, 1.7, 1.9]} worldWidth={2.4} />
       </group>
 
-      {/* Idle/offline agents in break room */}
-      {idleAgents.map((agent, i) => {
+      {/* OFFLINE/ERROR agents only — parked in the break room (present agents keep their desks) */}
+      {offlineAgents.map((agent, i) => {
         const seats: [number, number, number][] = [
           [-1.5, 0.42, -0.35],
           [-0.4, 0.42, -0.35],

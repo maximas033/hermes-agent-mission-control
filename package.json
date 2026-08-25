@@ -35,7 +35,8 @@
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "three-forcegraph": "^1.43.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
