@@ -105,27 +105,38 @@ function getGlow(): THREE.Texture {
 }
 
 const labelCache = new Map<string, THREE.Texture>();
+const LABEL_FONT = "600 44px ui-sans-serif, system-ui, sans-serif";
 function labelTexture(title: string): THREE.Texture {
   const hit = labelCache.get(title);
   if (hit) return hit;
-  const text = title.length > 28 ? title.slice(0, 27) + "…" : title;
-  const font = "600 34px ui-sans-serif, system-ui, sans-serif";
+  const text = title.length > 30 ? title.slice(0, 29) + "…" : title;
   const meas = document.createElement("canvas").getContext("2d")!;
-  meas.font = font;
-  const w = Math.ceil(meas.measureText(text).width) + 48;
-  const h = 64;
+  meas.font = LABEL_FONT;
+  const w = Math.ceil(meas.measureText(text).width) + 56;
+  const h = 84;
   const cv = document.createElement("canvas");
   cv.width = w;
   cv.height = h;
   const ctx = cv.getContext("2d")!;
-  ctx.font = font;
-  ctx.shadowColor = "rgba(0,0,0,0.9)";
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = "rgba(235,250,255,0.96)";
+  ctx.font = LABEL_FONT;
+  ctx.shadowColor = "rgba(0,0,0,0.95)";
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = "rgba(242,251,255,1)";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, 24, h / 2);
+  ctx.fillText(text, 28, h / 2);
+  // dark gradient backing (behind text) so labels stay readable over bright glows
+  ctx.globalCompositeOperation = "destination-over";
+  const grd = ctx.createLinearGradient(0, 0, w, 0);
+  grd.addColorStop(0, "rgba(3,6,12,0)");
+  grd.addColorStop(0.07, "rgba(3,6,12,0.6)");
+  grd.addColorStop(0.93, "rgba(3,6,12,0.6)");
+  grd.addColorStop(1, "rgba(3,6,12,0)");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  (tex as unknown as { userData: { w: number; h: number } }).userData = { w, h };
   labelCache.set(title, tex);
   return tex;
 }
@@ -134,7 +145,7 @@ function labelTexture(title: string): THREE.Texture {
 /* Layout: folder clusters on a sphere of clusters                     */
 /* ------------------------------------------------------------------ */
 
-const R_HUB = 13;
+const R_HUB = 22; // folder hubs pushed further apart on the sphere
 
 function buildLayout(nodes: VaultNodeDatum[], edges: VaultEdgeDatum[]) {
   const degreeOf = new Map<string, number>();
@@ -162,15 +173,15 @@ function buildLayout(nodes: VaultNodeDatum[], edges: VaultEdgeDatum[]) {
     const hz = dir.z * R_HUB;
 
     const kids = (byFolder.get(folder) ?? []).slice().sort((a, b) => a.title.localeCompare(b.title));
-    const clusterR = 3.1 + Math.min(2.6, Math.sqrt(kids.length) * 0.55);
+    const clusterR = 5.2 + Math.min(4.4, Math.sqrt(kids.length) * 0.95);
     const kidDirs = fibSphere(kids.length);
 
     kids.forEach((v, ki) => {
       const kd = kidDirs[ki];
       // small deterministic jitter so identical-size clusters don't look gridded
-      const jx = ((hashStr(v.id) % 100) / 100 - 0.5) * 1.4;
-      const jy = ((hashStr(v.path) % 100) / 100 - 0.5) * 1.4;
-      const jz = ((hashStr(v.id + v.title) % 100) / 100 - 0.5) * 1.4;
+      const jx = ((hashStr(v.id) % 100) / 100 - 0.5) * 3.2;
+      const jy = ((hashStr(v.path) % 100) / 100 - 0.5) * 3.2;
+      const jz = ((hashStr(v.id + v.title) % 100) / 100 - 0.5) * 3.2;
       const node: LaidNode = {
         ...v,
         degree: degreeOf.get(v.id) ?? 0,
@@ -320,10 +331,10 @@ function GraphScene({ laid, edges, posById, selectedId, onSelect }: SceneProps) 
         enableDamping
         dampingFactor={0.07}
         rotateSpeed={0.72}
-        zoomSpeed={0.85}
+        zoomSpeed={1.15}
         panSpeed={0.7}
-        minDistance={6}
-        maxDistance={70}
+        minDistance={2.2}
+        maxDistance={160}
         autoRotate
         autoRotateSpeed={0.35}
       />
@@ -413,6 +424,13 @@ const VaultNodeMesh = memo(function VaultNodeMesh({
   const matGlow = useRef<THREE.SpriteMaterial>(null!);
 
   const colBase = useMemo(() => new THREE.Color(folderColor(node.folder)), [node.folder]);
+  const labelScale = useMemo(() => {
+    // proportional world-size from texture pixels → no stretch at any aspect
+    const ud = (labelTexture(node.title) as unknown as { userData?: { w: number; h: number } }).userData;
+    if (!ud) return [3, 1] as const;
+    const worldH = 0.62; // on-screen label height in world units
+    return [(worldH * ud.w) / ud.h, worldH] as const;
+  }, [node.title]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
@@ -434,7 +452,8 @@ const VaultNodeMesh = memo(function VaultNodeMesh({
 
     if (label.current) {
       const lm = label.current.material as THREE.SpriteMaterial;
-      lm.opacity += ((showLabel && !dimmed ? 0.95 : 0) - lm.opacity) * 0.15;
+      lm.opacity += ((showLabel && !dimmed ? 0.97 : 0) - lm.opacity) * 0.15;
+      label.current.scale.set(labelScale[0], labelScale[1], 1);
     }
   });
 
@@ -467,7 +486,7 @@ const VaultNodeMesh = memo(function VaultNodeMesh({
         />
       </sprite>
 
-      <sprite ref={label} center={[0.5, 0]} position={[0, 1.1, 0]}>
+      <sprite ref={label} center={[0.5, 0]} position={[0, 1.15, 0]}>
         <spriteMaterial map={labelTexture(node.title)} transparent depthWrite={false} opacity={0} />
       </sprite>
     </group>
@@ -481,15 +500,15 @@ const VaultNodeMesh = memo(function VaultNodeMesh({
 function FocusRig({ selected }: { selected: LaidNode | null }) {
   const { camera, controls } = useThree() as any;
   const goalTarget = useRef(new THREE.Vector3(0, 0, 0));
-  const goalDist = useRef(34);
+  const goalDist = useRef(58);
 
   useEffect(() => {
     if (selected) {
       goalTarget.current.set(selected.bx, selected.by, selected.bz);
-      goalDist.current = 9;
+      goalDist.current = 11;
     } else {
       goalTarget.current.set(0, 0, 0);
-      goalDist.current = 34;
+      goalDist.current = 58;
     }
   }, [selected]);
 
@@ -548,12 +567,12 @@ export default function VaultGraph({
         }}
       >
         <Canvas
-          camera={{ position: [0, 9, 34], fov: 50 }}
+          camera={{ position: [0, 14, 56], fov: 50 }}
           gl={{ antialias: true, powerPreference: "high-performance" }}
           dpr={[1, 2]}
         >
           <color attach="background" args={["#05060a"]} />
-          <fog attach="fog" args={["#05060a", 46, 135]} />
+          <fog attach="fog" args={["#05060a", 80, 240]} />
           <GraphScene
             laid={laid}
             edges={edges}
