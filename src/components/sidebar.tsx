@@ -7,11 +7,9 @@ import {
 Home,
 Bot,
 Lightbulb,
-FileText,
 ClipboardList,
 Cpu,
 BookOpen,
-Workflow,
 Network,
 Menu,
 X,
@@ -24,13 +22,6 @@ const navGroups = [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/hermes", label: "Hermes", icon: Cpu },
       { href: "/tasks", label: "Tasks", icon: ClipboardList },
-    ],
-  },
-  {
-    name: "Content",
-    items: [
-      { href: "/content-os", label: "Pipeline", icon: Workflow },
-      { href: "/articles", label: "Articles", icon: FileText },
     ],
   },
   {
