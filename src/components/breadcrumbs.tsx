@@ -8,10 +8,8 @@ const pathLabels: Record<string, string> = {
   "/watchlist-radar": "Trend Radar",
   "/longform": "Longform",
   "/articles": "Articles",
-  "/client-pulse": "Client Pulse",
   "/agents": "Agents",
   "/ideas": "Ideas",
-  "/garden": "Garden",
   "/tasks": "Tasks",
 };
 

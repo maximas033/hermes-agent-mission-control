@@ -7,10 +7,8 @@ import {
 Home,
 Bot,
 Lightbulb,
-Flower2,
 FileText,
 ClipboardList,
-HeartPulse,
 Cpu,
 BookOpen,
 Workflow,
@@ -36,19 +34,12 @@ const navGroups = [
     ],
   },
   {
-    name: "Data",
-    items: [
-      { href: "/client-pulse", label: "Client Pulse", icon: HeartPulse },
-    ],
-  },
-  {
     name: "System",
     items: [
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
       { href: "/vault", label: "Vault", icon: Network },
       { href: "/ideas", label: "Ideas", icon: Lightbulb },
-      { href: "/garden", label: "Garden", icon: Flower2 },
     ],
   },
 ];

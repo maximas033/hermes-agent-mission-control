@@ -482,6 +482,20 @@ model AgentEvent {
   @@index([createdAt])
 }
 
+model Task {
+  id        String    @id @default(cuid())
+  name      String
+  status    String    @default("Not started")
+  priority  String    @default("")
+  category  String    @default("")
+  dueDate   String?
+  notionId  String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status])
+}
+
 model HermesTask {
   id        String   @id                   // Hermes task id
   board     String   @default("default")
