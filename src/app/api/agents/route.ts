@@ -86,6 +86,16 @@ const DEFAULT_AGENTS = [
     totalCost: 0,
     recentActivity: [],
   },
+  {
+    id: "1543333667223379988",
+    name: "Forge 3D",
+    emoji: "🧊",
+    role: "3D Print Design Agent",
+    status: "idle",
+    tasksCompleted: 0,
+    totalCost: 0,
+    recentActivity: [],
+  },
 ];
 
 export async function GET() {
