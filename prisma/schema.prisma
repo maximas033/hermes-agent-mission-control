@@ -544,3 +544,21 @@ model VaultNode {
 
   @@index([folder])
 }
+
+// ─── 3D Print Studio ──────────────────────────────────────────
+model PrintDesign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  author      String   @default("Jarvis")   // who proposed it
+  status      String   @default("pending")   // pending | approved | rejected | printing | done
+  geometry    String                         // JSON string: parametric spec OR stored .stl URL
+  thumbnail   String?                        // optional data URL / color hint
+  accentColor String   @default("#22D3EE")
+  feedback    String?                        // approver note on reject
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

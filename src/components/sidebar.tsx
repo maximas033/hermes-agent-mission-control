@@ -13,6 +13,7 @@ BookOpen,
 Network,
 Menu,
 X,
+Box,
 } from "lucide-react";
 
 const navGroups = [
@@ -31,6 +32,7 @@ const navGroups = [
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
       { href: "/vault", label: "Vault", icon: Network },
       { href: "/ideas", label: "Ideas", icon: Lightbulb },
+      { href: "/3d-print", label: "3D Print", icon: Box },
     ],
   },
 ];
@@ -40,6 +42,7 @@ const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/3d-print", label: "3D Print", icon: Box },
 ];
 
 export function Sidebar() {
