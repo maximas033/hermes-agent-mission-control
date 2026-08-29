@@ -484,6 +484,34 @@ export default function ThreeDPrintPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
   const [compare, setCompare] = useState(false);
+  const [forgePrompt, setForgePrompt] = useState("");
+  const [forgeBusy, setForgeBusy] = useState(false);
+  const [forgeReply, setForgeReply] = useState<string | null>(null);
+
+  const FORGE_3D_ID = "1543333667223379988";
+
+  const requestFromForge = async () => {
+    const prompt = forgePrompt.trim();
+    if (!prompt || forgeBusy) return;
+    setForgeBusy(true);
+    setForgeReply(null);
+    try {
+      const res = await fetch("/api/agent-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: FORGE_3D_ID, message: prompt }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setForgeReply(d.reply || "Design requested — check the approval queue below.");
+      setForgePrompt("");
+      // Refresh the library (bridge may have queued a new design)
+      setTimeout(() => fetchDesigns(false), 2500);
+    } catch {
+      setForgeReply("Could not reach Forge 3D. Try again or use New Design.");
+    } finally {
+      setForgeBusy(false);
+    }
+  };
 
   const fetchDesigns = useCallback(async (seedIfEmpty = false) => {
     try {
@@ -588,6 +616,32 @@ export default function ThreeDPrintPage() {
           New Design
         </Button>
       </div>
+
+      {/* Request from Forge 3D agent */}
+      <Panel className="mt-5 p-4" style={{ borderColor: "color-mix(in srgb, var(--accent) 24%, transparent)" }}>
+        <div className="flex items-center gap-2 mb-2.5">
+          <span className="text-[var(--accent)] text-[15px]">🧊</span>
+          <span className="text-[13px] font-semibold text-[var(--text)]">Ask Forge 3D to design something</span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={forgePrompt}
+            onChange={(e) => setForgePrompt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && requestFromForge()}
+            placeholder="e.g. design a wall mount for my router, or a phone stand"
+            className={inputCls}
+          />
+          <Button variant="primary" onClick={requestFromForge} disabled={forgeBusy || !forgePrompt.trim()}>
+            {forgeBusy ? "Designing…" : "Generate"}
+          </Button>
+        </div>
+        {forgeReply && (
+          <p className="text-[12px] text-[var(--text-2)] mt-2.5" style={{ borderLeft: "2px solid color-mix(in srgb, var(--accent) 40%, transparent)", paddingLeft: "10px" }}>
+            {forgeReply}
+          </p>
+        )}
+      </Panel>
 
       {/* Layout: library (left) + viewer + printer (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-[20rem_1fr] gap-6 items-start">
